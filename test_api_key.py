@@ -6,7 +6,7 @@ import requests
 def get_place_info(latitude, longitude):
     # 카카오맵 API 호출을 위한 기본 URL과 API 키 설정
     base_url = 'https://dapi.kakao.com/v2/local/geo/coord2address.json'
-    api_key = 'YOUR_KAKAO_API_KEY'  # 카카오 API 키를 여기에 입력합니다.
+    api_key = 'dd9e94f94c661563a78d155f2aeb7870'  # Rest API 키(by yu)
 
     # API 호출을 위한 파라미터 설정
     params = {
