@@ -1,2 +1,3 @@
 # Artificial_Intelligence
-Learning Part
+
+- <b>5/13</b> : 홍대입구역 주변 음식점 정보 가져오는 코드는 구현. <br> 단, 거리 조정 안해둬서 거리 조정해서 그 값까지 같이 저장하는 코드로 수정해야함.
