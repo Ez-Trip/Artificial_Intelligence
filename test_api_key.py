@@ -1,7 +1,4 @@
 import requests
-# 아직 수정해야 함
-## 건드리지 마시오.
-### 내꺼임
 
 def get_place_info(latitude, longitude):
     # 카카오맵 API 호출을 위한 기본 URL과 API 키 설정
@@ -25,7 +22,7 @@ def get_place_info(latitude, longitude):
         # JSON 형식으로 응답 데이터 가져오기
         data = response.json()
         # 장소 정보 추출
-        place_name = data['documents'][0]['address']['address_name']
+        place_name = data['documents'][0]['place_name']
         return place_name
     else:
         # 에러 발생 시
