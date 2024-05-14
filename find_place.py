@@ -69,7 +69,7 @@ def get_restaurants_for_area(area_name):
             break
     return restaurants
 
-area_name = '홍대입구역'
+area_name = '합정역'
 restaurants = get_restaurants_for_area(area_name)
 new_file_path = ''
 if restaurants:
