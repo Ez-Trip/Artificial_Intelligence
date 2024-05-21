@@ -10,7 +10,7 @@ def get_restaurants_in_area(area_name, page):
     params = {
         'query': area_name + ' 음식점',  # 검색할 키워드 (특정 구역명 + 음식점)
         'category_group_code': 'FD6',  # 음식점 카테고리 그룹 코드 (FD6: 음식점)
-        'size' : 15,  # 검색 결과의 개수 (최대 15개)
+        'size': 15,  # 검색 결과의 개수 (최대 15개)
         'page': page  # 페이지 번호
     }
 
@@ -69,26 +69,6 @@ def get_restaurants_for_area(area_name):
             break
     return restaurants
 
-area_name = '합정역'
-restaurants = get_restaurants_for_area(area_name)
-new_file_path = ''
-if restaurants:
-    print(f"{area_name}에서의 음식점 정보:")
-    for idx, restaurant in enumerate(restaurants, start=1):
-        print(f"{idx}. 이름: {restaurant['name']}, 주소: {restaurant['address']}")
-    
-    # CSV 파일에 새로운 음식점 정보 추가
-    csv_file_path = f'data/place_음식점_{area_name}.csv'
-    append_unique_restaurants_to_csv(restaurants, csv_file_path)
-    print(f"새로운 음식점 정보가 {csv_file_path} 파일에 추가되었습니다.")
-
-    # csv 파일 이름 변수 따로 저장
-    new_file_path = csv_file_path
-
-else:
-    print("음식점 정보를 가져오는 데 실패했습니다.")
-
-
 # 중복된 가게명 삭제
 def remove_duplicate_entries(file_path):
     # 중복을 제거할 음식점 정보를 담을 집합
@@ -108,6 +88,31 @@ def remove_duplicate_entries(file_path):
         for name, address in unique_restaurants:
             writer.writerow({'name': name, 'address': address})
 
-# CSV 파일에서 중복된 내용을 삭제하고 다시 저장
-remove_duplicate_entries(new_file_path)
-print(f"CSV 파일 '{new_file_path}'에서 중복된 내용을 삭제하고 다시 저장했습니다.")
+# 역 리스트
+station_list = [
+    '합정역', '홍대입구역', '신촌역', '이대역', '아현역', '마포역', '공덕역', '애오개역',
+    '월드컵경기장역', '마포구청역', '망원역', '상수역', '광흥창역', '대흥역', '서강대역', '디지털미디어시티역'
+]
+
+# 모든 역에 대해 음식점 정보 수집 및 저장
+for station in station_list:
+    restaurants = get_restaurants_for_area(station)
+    new_file_path = ''
+    if restaurants:
+        print(f"{station}에서의 음식점 정보:")
+        for idx, restaurant in enumerate(restaurants, start=1):
+            print(f"{idx}. 이름: {restaurant['name']}, 주소: {restaurant['address']}")
+        
+        # CSV 파일에 새로운 음식점 정보 추가
+        csv_file_path = f'data/place/place_음식점_{station}.csv'
+        append_unique_restaurants_to_csv(restaurants, csv_file_path)
+        print(f"새로운 음식점 정보가 {csv_file_path} 파일에 추가되었습니다.")
+
+        # csv 파일 이름 변수 따로 저장
+        new_file_path = csv_file_path
+
+        # CSV 파일에서 중복된 내용을 삭제하고 다시 저장
+        remove_duplicate_entries(new_file_path)
+        print(f"CSV 파일 '{new_file_path}'에서 중복된 내용을 삭제하고 다시 저장했습니다.")
+    else:
+        print(f"{station}에서 음식점 정보를 가져오는 데 실패했습니다.")
