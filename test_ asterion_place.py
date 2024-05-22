@@ -8,7 +8,7 @@ def get_place_info(place_name):
     # API 호출을 위한 파라미터 설정
     params = {
         'query': place_name,  # 검색할 가게 이름
-        'category_group_code': 'FD6',  # 음식점 카테고리 그룹 코드 (FD6: 카페)
+        'category_group_code': 'FD6',  # 음식점 카테고리 그룹 코드
         'size': 1  # 검색 결과의 개수 (최대 1개)
     }
 
