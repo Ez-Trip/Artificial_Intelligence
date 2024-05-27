@@ -80,7 +80,6 @@ def read_place_names_and_addresses_from_csv(file_path):
 
 # CSV 파일에 가게 이름, 주소, 평점을 추가하는 함수
 def write_place_data_with_ratings_to_csv(file_path, header, place_data_with_ratings):
-    header.append('평점')  # 헤더에 '평점' 추가
     header.append('카테고리')  # 헤더에 '카테고리' 추가
     with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
@@ -107,7 +106,6 @@ for csv_file_path in csv_files:
             place_url = f"http://place.map.kakao.com/{place_info['id']}"
             rating = get_ratings(place_url)
             category = place_info.get('category_name', '카테고리 없음')
-            row.append(rating)  # 평점을 기존 행에 추가
             row.append(category)  # 카테고리를 기존 행에 추가
             place_data_with_ratings.append(row)
             
@@ -115,7 +113,6 @@ for csv_file_path in csv_files:
             print(f"Category for {place_name}: {category}")
         else:
             print(f"Info not found for {place_name}")
-            row.append(None)  # 평점을 찾을 수 없는 경우 None 추가
             row.append('카테고리 없음')  # 카테고리를 찾을 수 없는 경우 '카테고리 없음' 추가
             place_data_with_ratings.append(row)
 
