@@ -32,8 +32,10 @@ def read_and_preprocess_csv_files(folder_path):
 def preprocess_category(category):
     if pd.isna(category):
         return '기타'
+    # 따옴표 제거
     category = category.replace('"', '')
-    return category.split(' > ')[0]
+    # '>'로 분할 후 첫 번째 부분 사용
+    return category.split(' > ')[1] if ' > ' in category else category
 
 def preprocess_rating(rating):
     if pd.isna(rating):
@@ -104,7 +106,7 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # 모델 저장 경로
 model_dir = 'model'
-model_path = os.path.join(model_dir, 'test_place_learning.pth')
+model_path = os.path.join(model_dir, 'test_place_learning_category.pth')
 
 # 모델 학습 및 저장
 if not os.path.exists(model_dir):
@@ -152,10 +154,12 @@ with torch.no_grad():
     
     print(f'Test Loss: {total_loss / len(test_loader):.4f}')
 
-# 특정 역의 음식점 추천 함수
-def recommend_top_places_near_station(model, data, station_name, top_n=3):
+# 특정 역과 카테고리의 음식점 추천 함수
+def recommend_top_places(model, data, station_name, category, top_n=3):
     station_id = label_encoders['역이름'].transform([station_name])[0]
-    filtered_data = data[data['역이름'] == station_id]
+    category_id = label_encoders['카테고리'].transform([category])[0]
+    
+    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == category_id)]
     
     features = torch.tensor(filtered_data[['카테고리', '역이름']].values, dtype=torch.float32)
     features = features.unsqueeze(1)
@@ -168,20 +172,25 @@ def recommend_top_places_near_station(model, data, station_name, top_n=3):
     
     return top_places
 
-# 사용자로부터 역 이름 입력 받기
+# 사용자로부터 역 이름과 카테고리 입력 받기
 station_list = [
     "공덕역", "광흥창역", "대흥역", "디지털미디어시티역", "마포구청역", 
     "마포역", "망원역", "상수역", "서강대역", "신촌역", "아현역", 
     "애오개역", "월드컵경기장역", "이대역", "합정역", "홍대입구역"
 ]
 
+category_list = ["한식", "일식", "중식", "양식", "기타"]
+
 print("Available stations: ", ", ".join(station_list))
 station_name = input("Enter a station name: ")
 
-# 해당 역 주변의 평점이 좋은 음식점 추천
-top_places = recommend_top_places_near_station(model, data, station_name)
+print("Available categories: ", ", ".join(category_list))
+category = input("Enter a category: ")
+
+# 해당 역과 카테고리 주변의 평점이 좋은 음식점 추천
+top_places = recommend_top_places(model, data, station_name, category)
 
 # 추천 결과 출력
-print(f"\nTop {len(top_places)} places near {station_name}:")
+print(f"\nTop {len(top_places)} places near {station_name} ({category}):")
 for idx, row in top_places.iterrows():
     print(f"{idx+1}. Name: {row['name']}, Rating: {row['predicted_rating']}")
