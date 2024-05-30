@@ -8,9 +8,10 @@ import torch.optim as optim
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
+import random
 
 # 데이터 전처리 함수들
-def read_and_preprocess_csv_files(folder_path, is_cafe=False):
+def read_and_preprocess_csv_files(folder_path, is_cafe=False, is_tourist=False, is_cultural=False):
     csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
     all_data = []
 
@@ -21,10 +22,14 @@ def read_and_preprocess_csv_files(folder_path, is_cafe=False):
         df = pd.read_csv(file_path)
         if is_cafe:
             df['카테고리'] = '카페'  # 카페 데이터에 카테고리 추가
+        elif is_tourist:
+            df['카테고리'] = '관광명소'
+        elif is_cultural:
+            df['카테고리'] = '문화시설'
         else:
             df['카테고리'] = df['카테고리'].apply(preprocess_category)
         
-        df['평점'] = df['평점'].apply(preprocess_rating)
+        df['평점'] = df['평점'].apply(preprocess_rating) if '평점' in df.columns else 0.0
         
         # 역 이름을 데이터프레임에 추가
         df['역이름'] = station_name
@@ -47,16 +52,21 @@ def preprocess_rating(rating):
     rating = re.findall(r'\d+\.\d+', str(rating))
     return float(rating[0]) if rating else 0.0
 
-# 음식점 데이터 로드 및 전처리
+# 데이터 로드 및 전처리
 csv_folder_path_place = 'data/place'
 data_place = read_and_preprocess_csv_files(csv_folder_path_place)
 
-# 카페 데이터 로드 및 전처리
 csv_folder_path_cafe = 'data/cafe'
 data_cafe = read_and_preprocess_csv_files(csv_folder_path_cafe, is_cafe=True)
 
-# 음식점 및 카페 데이터를 결합
-data = pd.concat([data_place, data_cafe], ignore_index=True)
+csv_folder_path_tourist = 'data/tourist'
+data_tourist = read_and_preprocess_csv_files(csv_folder_path_tourist, is_tourist=True)
+
+csv_folder_path_cultural = 'data/cultural'
+data_cultural = read_and_preprocess_csv_files(csv_folder_path_cultural, is_cultural=True)
+
+# 데이터 결합
+data = pd.concat([data_place, data_cafe, data_tourist, data_cultural], ignore_index=True)
 
 # 레이블 인코딩
 label_encoders = {}
@@ -117,7 +127,7 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # 모델 저장 경로
 model_dir = 'model'
-model_path = os.path.join(model_dir, 'test_place_and_cafe_learning.pth')
+model_path = os.path.join(model_dir, 'test_final_recommendation_model.pth')
 
 # 모델 학습 및 저장
 if not os.path.exists(model_dir):
@@ -201,6 +211,16 @@ def recommend_cafes(model, data, station_name, top_n=3):
     
     return top_cafes
 
+# 특정 역의 관광명소 및 문화시설 추천 함수 (랜덤 추천)
+def recommend_tourist_and_cultural(data, station_name, category, top_n=3):
+    station_id = label_encoders['역이름'].transform([station_name])[0]
+    category_id = label_encoders['카테고리'].transform([category])[0]
+    
+    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == category_id)]
+    top_places = filtered_data.sample(n=top_n, replace=False) if len(filtered_data) >= top_n else filtered_data
+    
+    return top_places
+
 # 사용자로부터 역 이름과 카테고리 입력 받기
 station_list = [
     "공덕역", "광흥창역", "대흥역", "디지털미디어시티역", "마포구청역", 
@@ -222,6 +242,12 @@ top_places = recommend_top_places(model, data, station_name, category)
 # 해당 역 주변의 평점이 좋은 카페 추천
 top_cafes = recommend_cafes(model, data, station_name)
 
+# 해당 역 주변의 랜덤 관광명소 추천
+top_tourist = recommend_tourist_and_cultural(data, station_name, '관광명소')
+
+# 해당 역 주변의 랜덤 문화시설 추천
+top_cultural = recommend_tourist_and_cultural(data, station_name, '문화시설')
+
 # 추천 결과 출력
 print(f"\nTop {len(top_places)} {category} places near {station_name}:")
 for idx, row in top_places.iterrows():
@@ -230,3 +256,11 @@ for idx, row in top_places.iterrows():
 print(f"\nTop {len(top_cafes)} cafes near {station_name}:")
 for idx, row in top_cafes.iterrows():
     print(f"{idx+1}. Name: {row['name']}, Rating: {row['predicted_rating']}")
+
+print(f"\nTop {len(top_tourist)} tourist places near {station_name}:")
+for idx, row in top_tourist.iterrows():
+    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
+
+print(f"\nTop {len(top_cultural)} cultural places near {station_name}:")
+for idx, row in top_cultural.iterrows():
+    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
