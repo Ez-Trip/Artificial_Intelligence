@@ -10,7 +10,7 @@ def get_restaurants_in_area(area_name, page):
         'query': area_name + ' 음식점',  # 검색할 키워드 (특정 구역명 + 음식점)
         'category_group_code': 'FD6',  # 음식점 카테고리 그룹 코드 (FD6: 음식점)
         'size': 15,  # 검색 결과의 개수 (최대 15개)
-        'page': 2  # 페이지 번호
+        'page': 4  # 페이지 번호
     }
 
     # API 호출
@@ -34,8 +34,8 @@ def get_restaurants_in_area(area_name, page):
         return None
     
 # 함수를 호출하여 특정 지역의 음식점 목록을 가져오는 코드
-area_name = '공덕역'  # 검색할 지역명
-page = 4  # 페이지 번호
+area_name = '홍대입구역'  # 검색할 지역명
+page = 3  # 페이지 번호
 
 # 함수 호출
 restaurants = get_restaurants_in_area(area_name, page)
