@@ -80,8 +80,10 @@ def read_place_names_and_addresses_from_csv(file_path):
 
 # CSV 파일에 가게 이름, 주소, 평점을 추가하는 함수
 def write_place_data_with_ratings_to_csv(file_path, header, place_data_with_ratings):
-    header.append('평점')  # 헤더에 '평점' 추가
-    header.append('카테고리')  # 헤더에 '카테고리' 추가
+    if '평점' not in header:
+        header.append('평점')  # 헤더에 '평점' 추가
+    if '카테고리' not in header:
+        header.append('카테고리')  # 헤더에 '카테고리' 추가
     with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(header)  # 헤더 작성
@@ -89,7 +91,7 @@ def write_place_data_with_ratings_to_csv(file_path, header, place_data_with_rati
 
 # 폴더 내 모든 CSV 파일에 대해 작업 수행
 csv_folder_path = 'data/accommodation'
-csv_files = glob.glob(os.path.join(csv_folder_path, '*.csv'))
+csv_files = glob.glob(os.path.join(csv_folder_path, 'place_숙박_애오개역.csv'))
 
 for csv_file_path in csv_files:
     print(f"Processing file: {csv_file_path}")
