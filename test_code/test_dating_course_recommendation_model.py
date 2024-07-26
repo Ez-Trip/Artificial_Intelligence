@@ -8,6 +8,7 @@ import torch.optim as optim
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
+from random import randint
 
 # 데이터 전처리 함수들
 def read_and_preprocess_csv_files(folder_path, is_cafe=False, is_tourist=False, is_cultural=False, is_accommodation=False):
@@ -15,12 +16,11 @@ def read_and_preprocess_csv_files(folder_path, is_cafe=False, is_tourist=False, 
     all_data = []
 
     for file_path in csv_files:
-        # 파일명에서 역 이름 추출
         station_name = os.path.basename(file_path).split('_')[-1].replace('.csv', '')
-        
         df = pd.read_csv(file_path)
+        
         if is_cafe:
-            df['카테고리'] = '카페'  # 카페 데이터에 카테고리 추가
+            df['카테고리'] = '카페'
         elif is_tourist:
             df['카테고리'] = '관광명소'
         elif is_cultural:
@@ -31,10 +31,7 @@ def read_and_preprocess_csv_files(folder_path, is_cafe=False, is_tourist=False, 
             df['카테고리'] = df['카테고리'].apply(preprocess_category)
         
         df['평점'] = df['평점'].apply(preprocess_rating) if '평점' in df.columns else 0.0
-        
-        # 역 이름을 데이터프레임에 추가
         df['역이름'] = station_name
-        
         all_data.append(df)
 
     return pd.concat(all_data, ignore_index=True)
@@ -42,17 +39,13 @@ def read_and_preprocess_csv_files(folder_path, is_cafe=False, is_tourist=False, 
 def preprocess_category(category):
     if pd.isna(category):
         return '기타'
-    # 따옴표 제거
     category = category.replace('"', '')
-    # '>'로 분할 후 두 번째 부분 사용
     return category.split(' > ')[1] if ' > ' in category else category
 
 def preprocess_accommodation_category(category):
     if pd.isna(category):
         return '기타'
-    # 따옴표 제거
     category = category.replace('"', '')
-    # '>'로 분할 후 숙박 유형 추출
     if '여관,모텔' in category:
         return '모텔'
     elif '호텔' in category:
@@ -144,22 +137,7 @@ model = RNNModel(input_size, hidden_size, output_size)
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-# 모델 저장 경로
-model_dir = 'model'
-model_path = os.path.join(model_dir, 'total_recommendation_model_v2.pth')
-
-# 모델 학습 및 저장
-if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
-
-# 모델 불러오는 코드
-# if os.path.exists(model_path):
-#     # 기존 모델 불러오기
-#     model.load_state_dict(torch.load(model_path))
-#     print("Model loaded from", model_path)
-# else:
-#     print("Training new model")
-
+# 모델 학습
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0
@@ -178,9 +156,6 @@ for epoch in range(num_epochs):
 
     print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {total_loss / len(train_loader):.4f}')
 
-    # 매 epoch마다 모델 저장
-    torch.save(model.state_dict(), model_path)
-
 # 모델 평가
 model.eval()
 with torch.no_grad():
@@ -195,12 +170,26 @@ with torch.no_grad():
     
     print(f'Test Loss: {total_loss / len(test_loader):.4f}')
 
-# 특정 역과 카테고리의 음식점 추천 함수
-def recommend_top_places(model, data, station_name, category, top_n=3):
-    station_id = label_encoders['역이름'].transform([station_name])[0]
-    category_id = label_encoders['카테고리'].transform([category])[0]
+def transform_label(label_encoder, value):
+    try:
+        return label_encoder.transform([value])[0]
+    except ValueError:
+        # 레이블이 존재하지 않는 경우, 기본값을 반환하거나 처리
+        return -1
+
+def recommend_top_places(model, data, station_name, category):
+    station_id = transform_label(label_encoders['역이름'], station_name)
+    category_id = transform_label(label_encoders['카테고리'], category)
     
-    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == category_id)]
+    if station_id == -1 or category_id == -1:
+        print(f"Error: Station name or category not found. Station: {station_name}, Category: {category}")
+        return pd.DataFrame()  # 빈 데이터프레임 반환
+
+    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == category_id) & (data['평점'] > 2.5)]
+    
+    if filtered_data.empty:
+        print(f"No data found for station: {station_name}, category: {category}")
+        return pd.DataFrame()
     
     features = torch.tensor(filtered_data[['카테고리', '역이름']].values, dtype=torch.float32)
     features = features.unsqueeze(1)
@@ -208,17 +197,25 @@ def recommend_top_places(model, data, station_name, category, top_n=3):
     with torch.no_grad():
         predictions = model(features).squeeze()
     
+    filtered_data = filtered_data.copy()
     filtered_data['predicted_rating'] = predictions
-    top_places = filtered_data[filtered_data['predicted_rating'] > 2.5].sort_values(by='predicted_rating', ascending=False).head(top_n)
+    top_places = filtered_data.sort_values(by='predicted_rating', ascending=False)
     
     return top_places
 
-# 특정 역의 카페 추천 함수
-def recommend_cafes(model, data, station_name, top_n=3):
-    station_id = label_encoders['역이름'].transform([station_name])[0]
-    cafe_category_id = label_encoders['카테고리'].transform(['카페'])[0]
+def recommend_cafes(model, data, station_name):
+    station_id = transform_label(label_encoders['역이름'], station_name)
+    cafe_category_id = transform_label(label_encoders['카테고리'], '카페')
     
-    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == cafe_category_id)]
+    if station_id == -1 or cafe_category_id == -1:
+        print(f"Error: Station name or category not found. Station: {station_name}, Category: 카페")
+        return pd.DataFrame()  # 빈 데이터프레임 반환
+
+    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == cafe_category_id) & (data['평점'] > 2.5)]
+    
+    if filtered_data.empty:
+        print(f"No data found for station: {station_name}")
+        return pd.DataFrame()
     
     features = torch.tensor(filtered_data[['카테고리', '역이름']].values, dtype=torch.float32)
     features = features.unsqueeze(1)
@@ -226,27 +223,25 @@ def recommend_cafes(model, data, station_name, top_n=3):
     with torch.no_grad():
         predictions = model(features).squeeze()
     
+    filtered_data = filtered_data.copy()
     filtered_data['predicted_rating'] = predictions
-    top_cafes = filtered_data[filtered_data['predicted_rating'] > 2.5].sort_values(by='predicted_rating', ascending=False).head(top_n)
+    top_cafes = filtered_data.sort_values(by='predicted_rating', ascending=False)
     
     return top_cafes
 
-# 특정 역의 관광명소 및 문화시설 추천 함수 (랜덤 추천)
-def recommend_tourist_and_cultural(data, station_name, category, top_n=3):
-    station_id = label_encoders['역이름'].transform([station_name])[0]
-    category_id = label_encoders['카테고리'].transform([category])[0]
+def recommend_accommodations(model, data, station_name, accommodation_type):
+    station_id = transform_label(label_encoders['역이름'], station_name)
+    accommodation_category_id = transform_label(label_encoders['카테고리'], accommodation_type)
     
-    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == category_id)]
-    top_places = filtered_data.sample(n=top_n, replace=False) if len(filtered_data) >= top_n else filtered_data
-    
-    return top_places
+    if station_id == -1 or accommodation_category_id == -1:
+        print(f"Error: Station name or accommodation type not found. Station: {station_name}, Accommodation Type: {accommodation_type}")
+        return pd.DataFrame()  # 빈 데이터프레임 반환
 
-# 특정 역의 숙박시설 추천 함수
-def recommend_accommodations(model, data, station_name, accommodation_type, top_n=3):
-    station_id = label_encoders['역이름'].transform([station_name])[0]
-    accommodation_category_id = label_encoders['카테고리'].transform([accommodation_type])[0]
+    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == accommodation_category_id) & (data['평점'] > 2.5)]
     
-    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == accommodation_category_id)]
+    if filtered_data.empty:
+        print(f"No data found for station: {station_name}, accommodation type: {accommodation_type}")
+        return pd.DataFrame()
     
     features = torch.tensor(filtered_data[['카테고리', '역이름']].values, dtype=torch.float32)
     features = features.unsqueeze(1)
@@ -254,12 +249,19 @@ def recommend_accommodations(model, data, station_name, accommodation_type, top_
     with torch.no_grad():
         predictions = model(features).squeeze()
     
+    filtered_data = filtered_data.copy()
     filtered_data['predicted_rating'] = predictions
-    top_accommodations = filtered_data[filtered_data['predicted_rating'] > 2.5].sort_values(by='predicted_rating', ascending=False).head(top_n)
+    top_accommodations = filtered_data.sort_values(by='predicted_rating', ascending=False)
     
     return top_accommodations
 
-# 사용자로부터 역 이름, 음식 카테고리 및 숙박시설 종류 입력 받기
+def recommend_tourist_and_cultural(data, station_name, category):
+    station_id = label_encoders['역이름'].transform([station_name])[0]
+    category_id = label_encoders['카테고리'].transform([category])[0]
+    
+    filtered_data = data[(data['역이름'] == station_id) & (data['카테고리'] == category_id)]
+    return filtered_data
+
 station_list = [
     "공덕역", "광흥창역", "대흥역", "디지털미디어시티역", "마포구청역", 
     "마포역", "망원역", "상수역", "서강대역", "신촌역", "아현역", 
@@ -270,47 +272,73 @@ category_list = ["한식", "일식", "중식", "양식", "기타"]
 
 accommodation_list = ["모텔", "호텔", "게스트하우스"]
 
-print("Available stations: ", ", ".join(station_list))
-station_name = input("Enter a station name: ")
+# 데이터 코스 생성 및 저장
+def create_and_save_random_courses(model, data, station_name, num_courses, csv_path):
+    all_courses = []
+    for _ in range(num_courses):
+        course_data = {
+            '음식점 이름': '', '음식점 카테고리': '', '음식점 평점': '', '음식점 주소': '',
+            '카페이름': '', '카페주소': '', '카페 평점': '',
+            '문화시설 이름': '', '문화시설 주소': '',
+            '관광시설 이름': '', '관광시설 주소': '',
+            '숙박업소 이름': '', '숙박업소 카테고리': '', '숙박업소 평점': '', '숙박업소 주소': ''
+        }
+        
+        # 음식점 추천
+        random_category = category_list[randint(0, len(category_list) - 1)]
+        top_places = recommend_top_places(model, data, station_name, random_category)
+        if not top_places.empty:
+            place = top_places.sample(n=1).iloc[0]
+            course_data.update({
+                '음식점 이름': place['name'], '음식점 카테고리': random_category, '음식점 평점': place['predicted_rating'], '음식점 주소': place['address']
+            })
+        
+        # 카페 추천
+        top_cafes = recommend_cafes(model, data, station_name)
+        if not top_cafes.empty:
+            cafe = top_cafes.sample(n=1).iloc[0]
+            course_data.update({
+                '카페이름': cafe['name'], '카페주소': cafe['address'], '카페 평점': cafe['predicted_rating']
+            })
+        
+        # 관광명소 추천
+        top_tourist = recommend_tourist_and_cultural(data, station_name, '관광명소')
+        if not top_tourist.empty:
+            tourist = top_tourist.sample(n=1).iloc[0]
+            course_data.update({
+                '관광시설 이름': tourist['name'], '관광시설 주소': tourist['address']
+            })
+        
+        # 문화시설 추천
+        top_cultural = recommend_tourist_and_cultural(data, station_name, '문화시설')
+        if not top_cultural.empty:
+            cultural = top_cultural.sample(n=1).iloc[0]
+            course_data.update({
+                '문화시설 이름': cultural['name'], '문화시설 주소': cultural['address']
+            })
+        
+        # 숙박시설 추천
+        random_accommodation = accommodation_list[randint(0, len(accommodation_list) - 1)]
+        top_accommodations = recommend_accommodations(model, data, station_name, random_accommodation)
+        if not top_accommodations.empty:
+            accommodation = top_accommodations.sample(n=1).iloc[0]
+            course_data.update({
+                '숙박업소 이름': accommodation['name'], '숙박업소 카테고리': random_accommodation, '숙박업소 평점': accommodation['predicted_rating'], '숙박업소 주소': accommodation['address']
+            })
+        
+        # 데이터프레임으로 변환
+        all_courses.append(course_data)
+    
+    # 전체 코스 데이터프레임으로 변환
+    courses_df = pd.DataFrame(all_courses)
+    
+    # CSV 파일로 저장
+    if not os.path.exists(os.path.dirname(csv_path)):
+        os.makedirs(os.path.dirname(csv_path))
+    courses_df.to_csv(csv_path, index=False)
+    print(f"Course data saved to {csv_path}")
 
-print("Available categories: ", ", ".join(category_list))
-category = input("Enter a category: ")
-
-print("Available accommodation types: ", ", ".join(accommodation_list))
-accommodation_type = input("Enter an accommodation type: ")
-
-# 해당 역과 카테고리 주변의 평점이 좋은 음식점 추천
-top_places = recommend_top_places(model, data, station_name, category)
-
-# 해당 역 주변의 평점이 좋은 카페 추천
-top_cafes = recommend_cafes(model, data, station_name)
-
-# 해당 역 주변의 랜덤 관광명소 추천
-top_tourist = recommend_tourist_and_cultural(data, station_name, '관광명소')
-
-# 해당 역 주변의 랜덤 문화시설 추천
-top_cultural = recommend_tourist_and_cultural(data, station_name, '문화시설')
-
-# 해당 역 주변의 평점이 좋은 숙박시설 추천
-top_accommodations = recommend_accommodations(model, data, station_name, accommodation_type)
-
-# 추천 결과 출력
-print(f"\nTop {len(top_places)} {category} places near {station_name}:")
-for idx, row in top_places.iterrows():
-    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
-
-print(f"\nTop {len(top_cafes)} cafes near {station_name}:")
-for idx, row in top_cafes.iterrows():
-    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
-
-print(f"\nTop {len(top_tourist)} tourist places near {station_name}:")
-for idx, row in top_tourist.iterrows():
-    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
-
-print(f"\nTop {len(top_cultural)} cultural places near {station_name}:")
-for idx, row in top_cultural.iterrows():
-    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
-
-print(f"\nTop {len(top_accommodations)} {accommodation_type}s near {station_name}:")
-for idx, row in top_accommodations.iterrows():
-    print(f"{idx+1}. Name: {row['name']}, Address: {row['address']}")
+# 모든 역에 대해 100개의 랜덤 코스 생성 및 저장
+for station_name in station_list:
+    csv_path = f"data/dating_course_recommendation/course_{station_name}.csv"
+    create_and_save_random_courses(model, data, station_name, 100, csv_path)
