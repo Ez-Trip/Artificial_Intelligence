@@ -3,6 +3,9 @@ import pandas as pd
 import time
 import undetected_chromedriver as uc
 from bs4 import BeautifulSoup
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # 카카오 REST API 키 설정
 KAKAO_API_KEY = 'dd9e94f94c661563a78d155f2aeb7870'
@@ -37,13 +40,25 @@ def get_average_price(place_id):
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
     
     driver = uc.Chrome(options=options)
     driver.get(url)
-    time.sleep(2)  # 페이지 로딩 대기
-
+    
+    try:
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'ul.list_menu')))
+    except Exception as e:
+        print(f"Error: {e}")
+        try:
+            alert = driver.switch_to.alert
+            alert.accept()
+        except:
+            pass
+    
+    time.sleep(5)  # 페이지 로드 시간을 늘려봅니다
+    
     soup = BeautifulSoup(driver.page_source, 'html.parser')
-    price_elements = soup.select('.price')
+    price_elements = soup.select('ul.list_menu li .price')  # .price 클래스를 가진 모든 li 요소 선택
     
     prices = []
     for elem in price_elements[:5]:  # 상위 5개 가격만 사용
@@ -77,7 +92,7 @@ for index, row in data.iterrows():
         row['평균 단가'] = '정보 없음'
     
     output_data = pd.concat([output_data, pd.DataFrame([row])], ignore_index=True)
-    time.sleep(1)  # API 호출 제한을 피하기 위한 대기 시간 설정
+    time.sleep(2)  # API 호출 제한을 피하기 위한 대기 시간 설정
 
 # 결과를 새로운 CSV 파일로 저장
 output_data.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
