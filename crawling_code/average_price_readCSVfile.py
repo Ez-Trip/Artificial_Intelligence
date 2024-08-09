@@ -19,6 +19,8 @@ output_dir = 'data/price'
 def get_place_id(place_name):
     url = "https://dapi.kakao.com/v2/local/search/keyword.json"
     headers = {"Authorization": f"KakaoAK {KAKAO_API_KEY}"}
+
+    # 음식점 : FD6 , 문화시설 : CT1 , 관광명소 AT4 , 숙박 : AD5, 카페 : CE7
     params = {"query": place_name, "category_group_code": "FD6"}
     
     response = requests.get(url, headers=headers, params=params)
